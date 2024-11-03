@@ -1,0 +1,30 @@
+{
+  "name": "sleeper-data-puller",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/dsaltz432/sleeper-data-puller.git",
+  "author": "Daniel Saltz",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lint": "eslint ./",
+    "lint:fix": "eslint --fix ./",
+    "start": "node index.js",
+    "deploy": "gcloud functions deploy sleeper-data-puller --gen2 --region us-central1 --runtime nodejs20 --trigger-http --entry-point api --allow-unauthenticated"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "lodash": "^4.17.21",
+    "spreadsheet-to-json": "^2.0.0"
+  },
+  "devDependencies": {
+    "eslint": "8.57.0",
+    "eslint-config-strongloop": "2.1.0",
+    "eslint-plugin-import": "2.29.1",
+    "eslint-plugin-jest": "28.6.0"
+  }
+}
