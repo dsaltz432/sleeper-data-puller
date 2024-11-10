@@ -1,6 +1,9 @@
+const _ = require('lodash');
 const sleeper = require('./sleeper-api');
-const { buildStandings } = require('./build-standings');
+const { formatTeams } = require('./format-teams');
 const { getMatchupsBreakdown } = require('./get-matchups-breakdown');
+const { assignMatchupProbabilities } = require('./assign-matchup-probabilities');
+const { simulatePlayoffProbabilities } = require('./simulate-playoff-probabilities');
 
 
 const fetchAndFormatData = async() => {
@@ -22,15 +25,33 @@ const fetchAndFormatData = async() => {
   // Get league rosters
   const rosters = await sleeper.getLeagueRosters(leagueId);
 
-  // Get standings from rosters
-  const standings = buildStandings({ users, rosters });
+  // Get teams from users and rosters
+  const teams = formatTeams({ users, rosters });
 
-  // Get formatted matchups
-  const matchupsBreakdown = await getMatchupsBreakdown({ leagueId, standings, playersMap, currentWeek });
+  // Get previous and future matchups
+  const matchupsBreakdown = await getMatchupsBreakdown(teams, leagueId, playersMap, currentWeek);
+
+  // Assign the win probabilities to each matchup
+  assignMatchupProbabilities(matchupsBreakdown, teams, currentWeek);
+
+  // Simulate playoffs
+  const { playoffProbabilitiesPerTeam, simulatedSeasons } = simulatePlayoffProbabilities(teams, matchupsBreakdown, currentWeek, 10);
+
+  // Attach playoff probabilities to each team
+  for (const team of teams) {
+    const playoffData = playoffProbabilitiesPerTeam[team.rosterId];
+    team.madePlayoffProbability = playoffData.madePlayoffProbability;
+    team.madePlayoffFromRecordProbability = playoffData.madePlayoffFromRecordProbability;
+    team.madePlayoffFromJordanRuleProbability = playoffData.madePlayoffFromJordanRuleProbability;
+  }
+
+  // Sort teams by win percentage and points for
+  const sortedTeams = _.orderBy(teams, ['winPercentage', 'pointsFor'], ['desc', 'desc']);
 
   return {
-    standings,
+    teams: sortedTeams,
     matchupsBreakdown,
+    // simulatedSeasons,
   };
 };
 
