@@ -5,6 +5,8 @@ const { getMatchupsBreakdown } = require('./get-matchups-breakdown');
 const { assignMatchupProbabilities } = require('./assign-matchup-probabilities');
 const { simulatePlayoffProbabilities } = require('./simulate-playoff-probabilities');
 
+let generatedResponse = null;
+let weekForGeneratedResponse = null;
 
 const fetchAndFormatData = async() => {
 
@@ -12,6 +14,13 @@ const fetchAndFormatData = async() => {
   const nflState = await sleeper.getNflState();
   const currentYear = nflState.season;
   const currentWeek = nflState.week;
+
+  // Return the generated response if it's already been generated for this week
+  if (generatedResponse && weekForGeneratedResponse === currentWeek) {
+    return generatedResponse;
+  } else {
+    weekForGeneratedResponse = currentWeek;
+  }
 
   // Get players
   const playersMap = await sleeper.getPlayersMap();
@@ -35,7 +44,7 @@ const fetchAndFormatData = async() => {
   assignMatchupProbabilities(matchupsBreakdown, teams, currentWeek);
 
   // Simulate playoffs
-  const { playoffProbabilitiesPerTeam, simulatedSeasons } = simulatePlayoffProbabilities(teams, matchupsBreakdown, currentWeek, 10);
+  const { playoffProbabilitiesPerTeam, simulatedSeasons } = simulatePlayoffProbabilities(teams, matchupsBreakdown, currentWeek, 10000);
 
   // Attach playoff probabilities to each team
   for (const team of teams) {
@@ -48,11 +57,14 @@ const fetchAndFormatData = async() => {
   // Sort teams by win percentage and points for
   const sortedTeams = _.orderBy(teams, ['winPercentage', 'pointsFor'], ['desc', 'desc']);
 
-  return {
+  generatedResponse = {
     teams: sortedTeams,
     matchupsBreakdown,
+    currentWeek,
     // simulatedSeasons,
   };
+
+  return generatedResponse;
 };
 
 
