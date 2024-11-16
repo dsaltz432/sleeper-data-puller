@@ -91,6 +91,7 @@ const simulateSeason = (teams, remainingSchedule, historicalPointsPerTeam) => {
       pointsFor: team.pointsFor,
       rosterId: team.rosterId,
       shortName: team.shortName,
+      overallRating: team.overallRating,
       meanPoints: mean,
       stdDevPoints: stdDev || mean * 0.15, // Fallback to 15% of mean if stdDev is zero
     };
@@ -151,7 +152,7 @@ const simulateSeason = (teams, remainingSchedule, historicalPointsPerTeam) => {
     }
   });
 
-  // Sort teams by win percentage and points for
+  // Sort teams by wins and pointsFor
   return _.orderBy(simulatedStandings, ['wins', 'pointsFor'], ['desc', 'desc']);
 };
 
@@ -174,16 +175,103 @@ const determinePlayoffTeams = (simulatedStandings) => {
   return [...top5Teams, teamWithHighestPointsFor];
 };
 
+// Function to calculate win probability between two teams based on overall ratings
+const calculateWinProbability = (ratingA, ratingB) => {
+  return ratingA / (ratingA + ratingB);
+};
+
+// Function to simulate the playoffs and determine the champion
+const simulatePlayoffs = (playoffTeams) => {
+  // Organize teams by seed
+  const teamsBySeed = {};
+  playoffTeams.forEach(team => {
+    teamsBySeed[team.seed] = team;
+  });
+
+  // Round 1: Wildcard Round
+  // Matchup 1: Seed 3 vs Seed 6
+  const seed3 = teamsBySeed[3];
+  const seed6 = teamsBySeed[6];
+
+  const probSeed3Wins = calculateWinProbability(seed3.overallRating, seed6.overallRating);
+  const winnerMatchup1 = (Math.random() < probSeed3Wins) ? seed3 : seed6;
+
+  // Matchup 2: Seed 4 vs Seed 5
+  const seed4 = teamsBySeed[4];
+  const seed5 = teamsBySeed[5];
+
+  const probSeed4Wins = calculateWinProbability(seed4.overallRating, seed5.overallRating);
+  const winnerMatchup2 = (Math.random() < probSeed4Wins) ? seed4 : seed5;
+
+  // Round 2: Semifinals
+  // Matchup 3: Seed 1 vs Winner of Matchup 2
+  const seed1 = teamsBySeed[1];
+  const probSeed1Wins = calculateWinProbability(seed1.overallRating, winnerMatchup2.overallRating);
+  const winnerMatchup3 = (Math.random() < probSeed1Wins) ? seed1 : winnerMatchup2;
+
+  // Matchup 4: Seed 2 vs Winner of Matchup 1
+  const seed2 = teamsBySeed[2];
+  const probSeed2Wins = calculateWinProbability(seed2.overallRating, winnerMatchup1.overallRating);
+  const winnerMatchup4 = (Math.random() < probSeed2Wins) ? seed2 : winnerMatchup1;
+
+  // Round 3: Finals
+  const probFinalWin = calculateWinProbability(winnerMatchup3.overallRating, winnerMatchup4.overallRating);
+  const champion = (Math.random() < probFinalWin) ? winnerMatchup3 : winnerMatchup4;
+
+  return champion;
+};
+// Updated Function to Simulate the Loser Bowl
+const simulateLoserBowl = (loserBowlTeams) => {
+  // Organize teams by seed (worst seed gets the highest number)
+  const teamsBySeed = {};
+  loserBowlTeams.forEach(team => {
+    teamsBySeed[team.seed] = team;
+  });
+
+  // Round 1: Seeds 7 vs 10 and 8 vs 9
+  const seed7 = teamsBySeed[7];
+  const seed10 = teamsBySeed[10];
+  const seed8 = teamsBySeed[8];
+  const seed9 = teamsBySeed[9];
+
+  const probSeed7Loses = calculateWinProbability(seed10.overallRating, seed7.overallRating);
+  const loserMatchup1 = (Math.random() < probSeed7Loses) ? seed7 : seed10;
+
+  const probSeed8Loses = calculateWinProbability(seed9.overallRating, seed8.overallRating);
+  const loserMatchup2 = (Math.random() < probSeed8Loses) ? seed8 : seed9;
+
+  // Round 2: Seed 11 vs Loser of Matchup 1, Seed 12 vs Loser of Matchup 2
+  const seed11 = teamsBySeed[11];
+  const seed12 = teamsBySeed[12];
+
+  const probSeed11Loses = calculateWinProbability(loserMatchup1.overallRating, seed11.overallRating);
+  const loserMatchup3 = (Math.random() < probSeed11Loses) ? seed11 : loserMatchup1;
+
+  const probSeed12Loses = calculateWinProbability(loserMatchup2.overallRating, seed12.overallRating);
+  const loserMatchup4 = (Math.random() < probSeed12Loses) ? seed12 : loserMatchup2;
+
+  // Round 3: Final Match between losers of Round 2
+  const probFinalLoses = calculateWinProbability(loserMatchup4.overallRating, loserMatchup3.overallRating);
+  const loserBowlChampion = (Math.random() < probFinalLoses) ? loserMatchup3 : loserMatchup4;
+
+  return loserBowlChampion;
+};
+
 // Main function to simulate playoff probabilities
 const simulatePlayoffProbabilities = (teams, matchupsBreakdown, currentWeek, numSimulations) => {
-  // Initialize playoff appearance counts
+  // Initialize counts
   const playoffCounts = {};
+  const championshipCounts = {};
+  const loserBowlCounts = {};
+
   teams.forEach((team) => {
     playoffCounts[team.rosterId] = {
       madePlayoffCount: 0,
       madePlayoffFromRecordCount: 0,
       madePlayoffFromJordanRuleCount: 0,
     };
+    championshipCounts[team.rosterId] = 0;
+    loserBowlCounts[team.rosterId] = 0;
   });
 
   // Extract historical points per team
@@ -194,6 +282,7 @@ const simulatePlayoffProbabilities = (teams, matchupsBreakdown, currentWeek, num
 
   // Start simulations
   const simulatedSeasons = [];
+
   for (let sim = 0; sim < numSimulations; sim++) {
     // Simulate a season
     const simulatedStandings = simulateSeason(teams, remainingSchedule, historicalPointsPerTeam);
@@ -201,8 +290,13 @@ const simulatePlayoffProbabilities = (teams, matchupsBreakdown, currentWeek, num
     // Determine playoff teams
     const playoffTeams = determinePlayoffTeams(simulatedStandings);
 
+    // Assign seeds to playoff teams based on their standings
+    const seededPlayoffTeams = _.orderBy(playoffTeams, ['wins', 'pointsFor'], ['desc', 'desc']).map((team, index) => {
+      return { ...team, seed: index + 1 };
+    });
+
     // Update playoff counts
-    playoffTeams.forEach((team) => {
+    seededPlayoffTeams.forEach((team) => {
       playoffCounts[team.rosterId].madePlayoffCount += 1;
       if (team.madePlayoffsFromRecord) {
         playoffCounts[team.rosterId].madePlayoffFromRecordCount += 1;
@@ -211,12 +305,36 @@ const simulatePlayoffProbabilities = (teams, matchupsBreakdown, currentWeek, num
       }
     });
 
+    // Simulate playoffs
+    const champion = simulatePlayoffs(seededPlayoffTeams);
+
+    // Update championship counts
+    championshipCounts[champion.rosterId] += 1;
+
+    // Determine Loser Bowl Teams
+    const playoffRosterIds = new Set(seededPlayoffTeams.map(team => team.rosterId));
+    const nonPlayoffTeams = simulatedStandings.filter(team => !playoffRosterIds.has(team.rosterId));
+
+    // Assign seeds to Loser Bowl teams (from 7 to 12, worst seed gets highest number)
+    const seededLoserBowlTeams = _.orderBy(nonPlayoffTeams, ['wins', 'pointsFor'], ['asc', 'asc']).map((team, index) => {
+      return { ...team, seed: index + 7 }; // Seeds from 7 to 12
+    });
+
+    // Simulate Loser Bowl
+    const loserBowlChampion = simulateLoserBowl(seededLoserBowlTeams);
+
+    // Update Loser Bowl counts
+    loserBowlCounts[loserBowlChampion.rosterId] += 1;
+
     // Store simulated standings
     simulatedSeasons.push(simulatedStandings);
   }
 
   // Calculate probabilities per team
   const playoffProbabilitiesPerTeam = {};
+  const championshipProbabilitiesPerTeam = {};
+  const loserBowlProbabilitiesPerTeam = {};
+
   teams.forEach((team) => {
     const playoffData = playoffCounts[team.rosterId];
     playoffProbabilitiesPerTeam[team.rosterId] = {
@@ -224,10 +342,16 @@ const simulatePlayoffProbabilities = (teams, matchupsBreakdown, currentWeek, num
       madePlayoffFromRecordProbability: playoffData.madePlayoffFromRecordCount / numSimulations,
       madePlayoffFromJordanRuleProbability: playoffData.madePlayoffFromJordanRuleCount / numSimulations,
     };
+    // Championship probability
+    championshipProbabilitiesPerTeam[team.rosterId] = championshipCounts[team.rosterId] / numSimulations;
+    // Loser Bowl probability
+    loserBowlProbabilitiesPerTeam[team.rosterId] = loserBowlCounts[team.rosterId] / numSimulations;
   });
 
   return {
     playoffProbabilitiesPerTeam,
+    championshipProbabilitiesPerTeam,
+    loserBowlProbabilitiesPerTeam,
     simulatedSeasons,
   };
 };

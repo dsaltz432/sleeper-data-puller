@@ -43,15 +43,24 @@ const fetchAndFormatData = async() => {
   // Assign the win probabilities to each matchup
   assignMatchupProbabilities(matchupsBreakdown, teams, currentWeek);
 
-  // Simulate playoffs
-  const { playoffProbabilitiesPerTeam, simulatedSeasons } = simulatePlayoffProbabilities(teams, matchupsBreakdown, currentWeek, 10000);
+  // After simulating probabilities
+  const {
+    playoffProbabilitiesPerTeam,
+    championshipProbabilitiesPerTeam,
+    loserBowlProbabilitiesPerTeam, // New
+    simulatedSeasons,
+  } = simulatePlayoffProbabilities(teams, matchupsBreakdown, currentWeek, 10000);
 
-  // Attach playoff probabilities to each team
   for (const team of teams) {
     const playoffData = playoffProbabilitiesPerTeam[team.rosterId];
     team.madePlayoffProbability = playoffData.madePlayoffProbability;
     team.madePlayoffFromRecordProbability = playoffData.madePlayoffFromRecordProbability;
     team.madePlayoffFromJordanRuleProbability = playoffData.madePlayoffFromJordanRuleProbability;
+
+    team.championshipProbability = championshipProbabilitiesPerTeam[team.rosterId];
+
+    // Attach Loser Bowl probability
+    team.loserBowlProbability = loserBowlProbabilitiesPerTeam[team.rosterId];
   }
 
   // Sort teams by win percentage and points for
